@@ -1,0 +1,94 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "Peter Randazzo"
+date: "Tuesday, March 17, 2015"
+output: html_document
+---
+
+## Synopsis    
+
+The goal of this project Was to utilize machine learning techiques in an effort to create a model that can correctly predict the classification of weight lifting exercise quality. If successful, alogrthms such as this can be used to improve the efficacy and lessen the risks of such exercises for the public.
+
+The data used was  from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. Participants were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is on the dataset is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+
+## Data Processing    
+
+In this section, the data is loaded from its original csvs and transformed for analysis.      
+
+####Load Data    
+**Steps and Code:**    
+
+1. The original csv training file is loaded into a staging data frame, *o_pmltraining*. This data frame will remain untouched, as loaded, and will contain no transforms minus the recasting of blank fields as NA.    
+2. The original csv testing file is loaded into a staging data frame, *o_pmltesting*. This data frame will remain untouched, as loaded, and will contain no transforms minus the recasting of blank fields as NA. 
+
+```{r load1, echo=TRUE, tidy=TRUE}     
+o_pmltraining <- read.csv("X:/R/pml/pml-training.csv",na.strings=c("NA",""))
+o_pmltesting <- read.csv("X:/R/pml/pml-testing.csv",na.strings=c("NA",""))  
+```    
+
+
+####Transformations
+**Steps and Code:**  
+
+1. Create copy of *o_pmltraining*, a data frame called *pmltraining*, while filtering out colums uncessary for analysis (ID, username, and timestamps). 
+2. Create copy of *o_pmltesting*, a data frame called *pmltesting*, matching the columns removed from the training set to be analyzed. 
+
+```{r tform1, echo=TRUE, tidy=TRUE}
+pmltraining <- o_pmltraining[,6:160]
+pmltesting <- o_pmltesting[,6:160]
+```
+
+3. Remove columns with NA's from *o_pmltraining* and *o_pmltesting*. Many columns have an exact and large amount of NA's (19216). These precisely correspond to the records for which the column new_window=="no". This is an artifact of the fact that records for which new_window=="yes" have summary fields filled in for the complete data window.
+
+```{r tform2, echo=TRUE, tidy=TRUE}
+no_na<-apply(!is.na(pmltraining),2,sum)>19216
+pmltraining<-pmltraining[,no_na]
+pmltesting<-pmltesting[,no_na]
+```
+
+4. Split the large data set to allow for faster processing, *pmltraining_A* and *pmltesting_B*
+
+```{r tform3, echo=TRUE, tidy=TRUE}
+set.seed(3942)
+library(caret)
+picktrain<-createDataPartition(y=pmltraining$classe,p=0.5,list=FALSE)
+pmltraining_A<-pmltraining[picktrain,]
+pmltraining_B<-pmltraining[-picktrain,]
+```
+
+5. Fit a random forest model to *pmltraining_A*, cross validating with 5 folds and limiting the number of trees to 50.
+
+```{r tform4, echo=TRUE, tidy=TRUE}
+modFit_A <- train(classe~ .,data=pmltraining_A,method="rf",prox=TRUE,ntree=50,trControl=trainControl(method="cv",number=5),allowParallel=TRUE)
+```
+
+
+## Results
+**Steps and Code:**      
+
+1. Test model by predicting against remaining split of training dataset, *pmltraining_B*.
+2. Create and view table, called *predtbl*, for comparing success of predictions from the model.
+     
+```{r res1, echo=TRUE, tidy=TRUE}
+pred <- predict(modFit_A,pmltraining_B)
+pmltraining_B$predRight <- pred==pmltraining_B$classe
+predtbl <- table(pred,pmltraining_B$classe)
+print(predtbl)
+```
+
+3. Print out readout from the application of Random Forest by caret and the final model selected.
+     
+```{r res2, echo=TRUE, tidy=TRUE}
+print(modFit_A)
+print(modFit_A$finalModel)
+```
+
+
+**Analysis of Model**  
+
+Our model seems reliable when compared against the split from the training data set, as the number of prediction errors is very small. Structurally, it is also similar to the confusion matrix for the final model selected.
+
+This is consistent with the expectation set by the random forest model, whick predicts an accuracy of 0.9932721. For the final model of 28 variables, the estimated out of sample error rate is quite small at .55%. 
+
+We have a high degree of confidence for successful prediction. 
